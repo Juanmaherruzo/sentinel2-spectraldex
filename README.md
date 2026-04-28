@@ -1,38 +1,63 @@
-# sentinel2-cdse-pipeline
+<div align="center">
 
-End-to-end Jupyter pipeline for searching, downloading, and computing spectral indices from **Sentinel-2 Level-2A** imagery via the [Copernicus Data Space Ecosystem (CDSE)](https://dataspace.copernicus.eu/) free API.
+# sentinel2-spectraldex
+
+**Automated Sentinel-2 spectral index pipeline — no subscription required**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Data: CDSE](https://img.shields.io/badge/data-Copernicus%20CDSE-009a3e)](https://dataspace.copernicus.eu/)
+[![Satellite: Sentinel-2 L2A](https://img.shields.io/badge/satellite-Sentinel--2%20L2A-0070c0)](https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-2)
+
+</div>
+
+---
+
+Give the pipeline a polygon and a date range. It searches the [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/), downloads only the 7 bands it needs (no full ~1 GB SAFE archives), merges multi-tile AOIs automatically, and delivers six analysis-ready spectral index GeoTIFFs plus a validation dashboard — all from a free CDSE account.
+
+```
+your_aoi.gpkg  +  date range  →  NDVI · SAVI · EVI · NBR · NDRE · NDWI  (float32 GeoTIFF)
+```
+
+---
+
+## Pipeline
+
+```
+Step 0  ──  OAuth2 authentication (CDSE)
+Step 1  ──  Load AOI from .gpkg → reproject → interactive map preview
+Step 2  ──  Search L2A scenes (date, cloud cover, AOI) → deduplicate
+Step 3  ──  Download B02 B03 B04 B05 B8A B11 B12 via HTTP streaming
+Step 4  ──  Merge tiles → clip to AOI → compute 6 indices → LZW GeoTIFF
+Step 5  ──  Validation dashboard: spatial maps + histograms + statistics
+```
+
+---
 
 ## Key features
 
-- **No subscription required** — uses the free CDSE OData HTTP API with OAuth2 authentication
-- **Band-selective download** — fetches only the 7 bands you need, not the full ~1 GB SAFE archive
-- **Multi-tile support** — automatically merges MGRS tiles when your AOI spans tile boundaries
-- **Six spectral indices**: NDVI, SAVI (configurable L factor), EVI, NBR, NDRE, NDWI
-- **Validation dashboard** — per-index spatial map + histogram + statistics for every processed scene
-- **AOI-driven workflow** — load any polygon from a `.gpkg` file; everything else is automated
+| Feature | Detail |
+|---------|--------|
+| **Free API** | Uses CDSE OData HTTP + OAuth2 — no Sentinel Hub subscription |
+| **Band-selective** | Downloads only 7 bands per scene instead of the full SAFE archive |
+| **Multi-tile** | Automatically detects and merges MGRS tiles when the AOI crosses boundaries |
+| **6 indices** | NDVI, SAVI (configurable L), EVI, NBR, NDRE, NDWI |
+| **Analysis-ready output** | float32 · LZW compressed · tiled 256×256 · nodata masked |
+| **Rate-limit safe** | Retries on HTTP 429 with exponential backoff |
 
-## Pipeline overview
+---
 
-| Step | Cell | Description |
-|------|------|-------------|
-| 0 | `cell 0` | CDSE OAuth2 authentication + HTTP band download helper |
-| 1 | `cell 1` | Load AOI from `.gpkg`, reproject to WGS84, interactive map preview |
-| 2 | `cell 2` | Search Sentinel-2 L2A scenes (date window, cloud cover, AOI intersection) + deduplication |
-| 3 | `cell 3` | Download bands B02, B03, B04, B05, B8A, B11, B12 via HTTP streaming |
-| 4 | `cell 4` | Compute indices, merge tiles, clip to AOI → LZW-compressed float32 GeoTIFF |
-| 5 | `cell 5` | Validation dashboard: spatial maps + histograms + per-index statistics |
+## Getting started
 
-## Requirements
+### 1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Credentials
+### 2. Set credentials
 
-Register for a free account at [dataspace.copernicus.eu](https://dataspace.copernicus.eu/).
-
-**Option A — environment variables (recommended):**
+Register for free at [dataspace.copernicus.eu](https://dataspace.copernicus.eu/), then:
 
 ```bash
 # Linux / macOS
@@ -44,36 +69,50 @@ $env:CDSE_USER = "your_email@example.com"
 $env:CDSE_PASSWORD = "your_password"
 ```
 
-**Option B — `.env` file:**
+> Alternatively, copy `.env.example` to `.env` and fill in your credentials. The `.env` file is git-ignored and will never be committed.
 
-```bash
-cp .env.example .env
-# edit .env with your credentials
-```
+### 3. Configure and run
 
-`.env` is listed in `.gitignore` and will never be committed.
+Open `sentinel2_pipeline.ipynb` and search for `# Change it` — those are the only lines you need to edit:
 
-## Customisation
+| Step | Parameter | What to set |
+|------|-----------|-------------|
+| 0 | `CDSE_USER / CDSE_PASSWORD` | Your CDSE credentials (or use env vars) |
+| 1 | `GPKG_PATH` | Path to your AOI `.gpkg` file |
+| 2 | `date_start / date_end` | Temporal window for scene search |
+| 2 | `max_cloud_cover` | Maximum cloud cover threshold (%) |
+| 3 | `output_dir` | Folder for downloaded raw bands |
+| 4 | `output_root` | Folder for computed index GeoTIFFs |
+| 4 | `savi_L` | SAVI soil adjustment factor (see table below) |
 
-Search for `# Change it` comments — those are the only lines you need to edit:
+Run all cells in order — each step feeds into the next.
 
-| Step | What to change |
-|------|----------------|
-| Step 0 | CDSE credentials (or set env vars) |
-| Step 1 | Path to your AOI `.gpkg` file |
-| Step 2 | Date window (`date_start`, `date_end`) and `max_cloud_cover` |
-| Step 3 | Output directory for raw bands |
-| Step 4 | Output directory for index GeoTIFFs, SAVI `L` factor |
+---
 
-## SAVI L factor guide
+## Spectral indices
 
-| L value | Fractional canopy cover |
-|---------|-------------------------|
-| 0.0 | Dense canopy (FCC > 90 %) |
-| 0.25 | Moderately dense (FCC 60–90 %) |
-| 0.5 | Intermediate (FCC 30–60 %) |
-| 0.75 | Sparse (FCC 10–30 %) |
-| 1.0 | Bare soil or very sparse (FCC < 10 %) |
+| Index | Formula | Application |
+|-------|---------|-------------|
+| **NDVI** | (B8A − B04) / (B8A + B04) | General vegetation greenness |
+| **SAVI** | ((B8A − B04) / (B8A + B04 + L)) × (1 + L) | Vegetation over sparse/bare soils |
+| **EVI** | 2.5 × (B8A−B04) / (B8A+6×B04−7.5×B02+1) | Dense canopy without saturation |
+| **NBR** | (B8A − B12) / (B8A + B12) | Burn severity, post-fire mapping |
+| **NDRE** | (B8A − B05) / (B8A + B05) | Canopy chlorophyll in dense forests |
+| **NDWI** | (B03 − B8A) / (B03 + B8A) | Surface water and soil moisture |
+
+> **Why NDRE?** In closed-canopy forests and silvopastoral systems, NDVI saturates above ~0.8. NDRE uses the red-edge band (705 nm) and remains sensitive to chlorophyll content even at high biomass levels.
+
+### SAVI L factor
+
+| L | Fractional canopy cover |
+|---|------------------------|
+| `0.0` | Dense canopy — FCC > 90 % |
+| `0.25` | Moderately dense — FCC 60–90 % |
+| `0.5` | Intermediate — FCC 30–60 % *(default)* |
+| `0.75` | Sparse — FCC 10–30 % |
+| `1.0` | Bare or very sparse — FCC < 10 % |
+
+---
 
 ## Output structure
 
@@ -82,41 +121,30 @@ sentinel2_data/
 ├── raw_bands/
 │   └── 2024-06-15/
 │       ├── T30SUH/
-│       │   ├── B02.jp2
-│       │   ├── B03.jp2
-│       │   ├── B04.jp2
-│       │   ├── B05.jp2
-│       │   ├── B8A.jp2
-│       │   ├── B11.jp2
-│       │   └── B12.jp2
+│       │   ├── B02.jp2  ├── B03.jp2  ├── B04.jp2
+│       │   ├── B05.jp2  ├── B8A.jp2  ├── B11.jp2  └── B12.jp2
 │       └── T30SVF/
 │           └── ...
 └── index_results/
     └── 2024-06-15/
-        ├── NDVI.tif
-        ├── SAVI.tif
-        ├── EVI.tif
-        ├── NBR.tif
-        ├── NDRE.tif
-        ├── NDWI.tif
+        ├── NDVI.tif  ├── SAVI.tif  ├── EVI.tif
+        ├── NBR.tif   ├── NDRE.tif  ├── NDWI.tif
         └── dashboard_2024-06-15.png
 ```
 
-## Index reference
+Output GeoTIFFs are float32, LZW-compressed, tiled (256 × 256 blocks) and ready to open directly in QGIS, GDAL, or rasterio.
 
-| Index | Formula | Primary use |
-|-------|---------|-------------|
-| NDVI | (B8A − B04) / (B8A + B04) | General vegetation greenness |
-| SAVI | ((B8A − B04) / (B8A + B04 + L)) × (1 + L) | Vegetation with soil adjustment |
-| EVI | 2.5 × (B8A−B04) / (B8A+6×B04−7.5×B02+1) | Vegetation, no canopy saturation |
-| NBR | (B8A − B12) / (B8A + B12) | Burn severity, fire scars |
-| NDRE | (B8A − B05) / (B8A + B05) | Canopy chlorophyll (dense canopy) |
-| NDWI | (B03 − B8A) / (B03 + B8A) | Surface water and soil moisture |
+---
 
-> **Note on NDRE**: particularly useful in silvopastoral systems and closed-canopy forests where NDVI saturates — NDRE remains sensitive to chlorophyll content at high biomass levels.
+## Technical notes
 
-## Notes
+- **Token refresh** — CDSE OAuth2 tokens expire after 10 minutes. The pipeline requests a fresh token before every HTTP call, so long batches never fail mid-download.
+- **Rate limiting** — CDSE enforces download quotas. Keep `n_threads = 1` for large batches; the pipeline retries automatically on HTTP 429 with a 30-second backoff (3 attempts).
+- **Multi-tile merge** — when the AOI intersects more than one MGRS tile, scenes are merged in memory before clipping and index computation. No intermediate files are written.
+- **Deduplication** — if the same date/tile appears from multiple satellites (S2A, S2B, S2C) or processing runs, the pipeline keeps the lowest cloud cover version automatically.
 
-- CDSE rate-limits downloads. The pipeline retries on HTTP 429 with a 30-second backoff; keep `n_threads = 1` on large batches.
-- OAuth2 tokens expire after 10 minutes. The pipeline refreshes the token before every HTTP request.
-- Output GeoTIFFs are float32 LZW-compressed tiled rasters (256 × 256 blocks), ready for QGIS, GDAL, or rasterio.
+---
+
+## License
+
+Distributed under the [MIT License](LICENSE).
