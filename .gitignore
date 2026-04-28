@@ -1,0 +1,32 @@
+# Credentials — never commit these
+.env
+*.env
+
+# Downloaded Sentinel-2 data (large binary files)
+sentinel2_data/
+raw_bands/
+index_results/
+Capas_indices_multiespectrales/
+*.jp2
+*.tif
+*.SAFE/
+
+# Jupyter
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
