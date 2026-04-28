@@ -21,6 +21,14 @@ your_aoi.gpkg  +  date range  →  NDVI · SAVI · EVI · NBR · NDRE · NDWI  (
 
 ---
 
+## Example output
+
+![Spectral Index Dashboard](assets/dashboard_example.png)
+
+*Six spectral indices computed from a Sentinel-2 L2A scene over a ~360,000 ha study area in southern Spain (April 2026, cloud cover < 1 %). Each panel shows the spatial distribution and pixel-level histogram. The low NDWI (mean −0.22) confirms predominantly dry vegetation, while NDRE (mean 0.14) captures chlorophyll variation beneath dense canopy where NDVI saturates.*
+
+---
+
 ## Pipeline
 
 ```
