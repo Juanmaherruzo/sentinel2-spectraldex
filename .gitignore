@@ -1,12 +1,5 @@
-# Credentials — never commit these
-.env
-*.env
-
-# Downloaded Sentinel-2 data (large binary files)
-sentinel2_data/
-raw_bands/
-index_results/
-Capas_indices_multiespectrales/
+# Downloaded Sentinel-2 bands and computed index GeoTIFFs (large binary files)
+output/
 *.jp2
 *.tif
 *.SAFE/
