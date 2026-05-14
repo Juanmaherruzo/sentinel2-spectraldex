@@ -112,7 +112,7 @@ If you use this work in your research, please cite:
 
 @software{herruzo2026sentinel2-spectraldex,
 author  = {Herruzo, Juan Manuel},
-title   = {},
+title   = {sentinel2-spectraldex},
 year    = {2026},
 url     = {[https://github.com/Juanmaherruzo/sentinel2-spectraldex](https://github.com/Juanmaherruzo/sentinel2-spectraldex)}
 }
