@@ -1,6 +1,7 @@
 # sentinel2-spectraldex
 
 Automated Sentinel-2 L2A spectral index pipeline powered by **Microsoft Planetary Computer**. Given a polygon AOI and a date range, the pipeline delivers six analysis-ready GeoTIFFs — NDVI, SAVI, EVI, NBR, NDRE, NDWI — plus a per-scene validation dashboard, without requiring any credentials or data subscriptions.
+
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Platform](https://img.shields.io/badge/Platform-Microsoft%20Planetary%20Computer-blue)
