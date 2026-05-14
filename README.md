@@ -8,6 +8,8 @@ Automated Sentinel-2 L2A spectral index pipeline powered by **Microsoft Planetar
 
 ![Dashboard example](assets/dashboard_example.png)
 
+---
+
 ## Pipeline overview
 
 | Cell | Step | Description |
@@ -25,6 +27,8 @@ Automated Sentinel-2 L2A spectral index pipeline powered by **Microsoft Planetar
 - **Bandwidth-efficient** — `stackstac` issues HTTP range requests against Cloud Optimised GeoTIFFs, transferring only the pixels that fall within your bounding box (~30–200 MB per scene instead of the full ~1 GB SAFE archive).
 - **Multi-tile support** — scenes that span two or more MGRS tiles are automatically merged with `rasterio` before polygon clipping.
 
+---
+
 ## Spectral indices
 
 | Index | Formula | Application |
@@ -38,6 +42,8 @@ Automated Sentinel-2 L2A spectral index pipeline powered by **Microsoft Planetar
 
 All bands are scaled from Sentinel-2 DN to surface reflectance (DN / 10 000) prior to index computation. Output values are clamped to physically meaningful ranges and pixels outside the AOI polygon are set to −9999.
 
+---
+
 ## Installation
 
 ```bash
@@ -45,6 +51,8 @@ conda create -n sentinel2 python=3.11
 conda activate sentinel2
 pip install -r requirements.txt
 ```
+
+---
 
 ## Usage
 
@@ -54,6 +62,8 @@ pip install -r requirements.txt
 4. **Cell 2** — adjust `date_start`, `date_end`, and `max_cloud_cover`.
 5. **Cell 4** — set `aoi_path` to the same GeoPackage and adjust `savi_L` if needed (`0.5` is a general-purpose default; use `0.1` for dense forest, `1.0` for bare soil).
 6. Run all cells in order (Kernel → Run All).
+
+---
 
 ## Output structure
 
@@ -78,6 +88,8 @@ output/
 
 All index rasters are **float32, LZW-compressed, tiled GeoTIFFs** ready for QGIS, GDAL, or any rasterio-based workflow. Nodata value is −9999.
 
+---
+
 ## Requirements
 
 See `requirements.txt`. Key dependencies:
@@ -93,6 +105,28 @@ See `requirements.txt`. Key dependencies:
 | `folium` | Interactive AOI preview map |
 | `matplotlib` | Validation dashboard figures |
 
+---
+
+## Citation
+If you use this work in your research, please cite:
+
+@software{herruzo2026aove,
+author  = {Herruzo, Juan Manuel},
+title   = {},
+year    = {2026},
+url     = {[https://github.com/Juanmaherruzo/sentinel2-spectraldex](https://github.com/Juanmaherruzo/sentinel2-spectraldex)}
+}
+
+---
+
+## Contact
+
+**Juan Manuel Herruzo**  juanmherruzo@gmail.com
+
+---
+
 ## License
 
-MIT
+Distributed under the [MIT License](LICENSE).
+
+---
