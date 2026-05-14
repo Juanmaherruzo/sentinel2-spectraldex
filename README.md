@@ -110,7 +110,7 @@ See `requirements.txt`. Key dependencies:
 ## Citation
 If you use this work in your research, please cite:
 
-@software{herruzo2026aove,
+@software{herruzo2026sentinel2-spectraldex,
 author  = {Herruzo, Juan Manuel},
 title   = {},
 year    = {2026},
