@@ -1,6 +1,6 @@
 # sentinel2-spectraldex
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
+![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Platform](https://img.shields.io/badge/Platform-Microsoft%20Planetary%20Computer-blue)
 
@@ -12,14 +12,15 @@ Automated Sentinel-2 L2A spectral index pipeline powered by **Microsoft Planetar
 
 ## Pipeline overview
 
-| Cell | Step | Description |
-|------|------|-------------|
-| 0 | Setup | Connect to the Planetary Computer STAC catalogue |
-| 1 | AOI | Load a GeoPackage, reproject to EPSG:4326, preview on an interactive map |
-| 2 | Search | Query Sentinel-2 L2A scenes by date, cloud cover, and spatial extent |
-| 3 | Download | Fetch only the required bands via COG HTTP range requests |
-| 4 | Compute | Merge multi-tile scenes, clip to the AOI polygon, compute all six indices |
-| 5 | Dashboard | Generate spatial maps and histograms for each processed scene |
+| Module | Step | Description |
+|--------|------|-------------|
+| `config` | Setup | Lazy connection to the Planetary Computer STAC catalogue |
+| `aoi` | AOI | Load a GeoPackage, reproject to EPSG:4326, preview on an interactive map |
+| `search` | Search | Query Sentinel-2 L2A scenes by date, cloud cover and spatial extent |
+| `download` | Download | Fetch only the required bands via COG HTTP range requests |
+| `indices` | Compute | Merge multi-tile scenes, clip to the AOI polygon, compute all six indices |
+| `indices` | Dashboard | Generate spatial maps and histograms for each processed scene |
+| `pipeline` | Orchestrate | Run every step end-to-end (`s2-indices` CLI) |
 
 ### Why Planetary Computer?
 
@@ -47,21 +48,33 @@ All bands are scaled from Sentinel-2 DN to surface reflectance (DN / 10 000) pri
 ## Installation
 
 ```bash
-conda create -n sentinel2 python=3.11
-conda activate sentinel2
-pip install -r requirements.txt
+# with pip
+pip install -e ".[dev]"
+
+# or with uv (faster)
+uv venv && uv pip install -e ".[dev]"
 ```
 
 ---
 
 ## Usage
 
-1. Open `sentinel2_pipeline.ipynb`.
-2. **Cell 0** — if you have a PostGIS / PostgreSQL installation that overrides `PROJ_DATA`, uncomment the workaround block and set the correct path (see the comment in that cell).
-3. **Cell 1** — set `GPKG_PATH` to your area of interest GeoPackage.
-4. **Cell 2** — adjust `date_start`, `date_end`, and `max_cloud_cover`.
-5. **Cell 4** — set `aoi_path` to the same GeoPackage and adjust `savi_L` if needed (`0.5` is a general-purpose default; use `0.1` for dense forest, `1.0` for bare soil).
-6. Run all cells in order (Kernel → Run All).
+Installing the package exposes the `s2-indices` command, which runs the whole
+pipeline end-to-end (AOI → search → download → indices → dashboards):
+
+```bash
+s2-indices \
+  --aoi path/to/your/aoi.gpkg \
+  --start 2024-06-01 \
+  --end 2024-09-30 \
+  --output-dir output \
+  --max-cloud 10 \
+  --savi-l 0.5        # 0.1 for dense forest, 1.0 for bare soil
+```
+
+The individual stages are also importable — `sentinel2.aoi`, `sentinel2.search`,
+`sentinel2.download`, `sentinel2.indices` — and `sentinel2.pipeline.run(...)`
+drives them programmatically.
 
 ---
 
@@ -92,7 +105,7 @@ All index rasters are **float32, LZW-compressed, tiled GeoTIFFs** ready for QGIS
 
 ## Requirements
 
-See `requirements.txt`. Key dependencies:
+Dependencies are declared in `pyproject.toml`. Key libraries:
 
 | Package | Role |
 |---------|------|

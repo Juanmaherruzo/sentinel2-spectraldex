@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentinel2-spectraldex"
+version = "0.1.0"
+description = "Sentinel-2 L2A spectral index pipeline (STAC search, COG download, indices)"
+authors = [{ name = "Juan Manuel Herruzo", email = "juanmherruzo@gmail.com" }]
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "planetary-computer>=1.0.0,<2.0.0",
+    "pystac-client>=0.7.0,<1.0.0",
+    "stackstac>=0.5.1,<1.0.0",
+    "xarray>=2023.1.0,<2027.0.0",
+    "dask[array]>=2023.1.0,<2027.0.0",
+    "rasterio>=1.3.0,<2.0.0",
+    "affine>=2.4.0,<3.0.0",
+    "geopandas>=0.14.0,<2.0.0",
+    "shapely>=2.0.0,<3.0.0",
+    "folium>=0.16.0,<1.0.0",
+    "numpy>=1.24.0,<3.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "scipy>=1.11.0,<2.0.0",
+    "matplotlib>=3.7.0,<4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0,<9.0.0",
+    "black>=24.0.0,<26.0.0",
+    "ruff>=0.5.0,<1.0.0",
+    "mypy>=1.10.0,<2.0.0",
+]
+
+[project.scripts]
+s2-indices = "sentinel2.pipeline:main"
+
+[project.urls]
+Repository = "https://github.com/Juanmaherruzo/sentinel2-spectraldex"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sentinel2*"]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+# numpy's current stubs use PEP 695 `type` statements that mypy only parses
+# under python_version >= 3.12; skip following them (treated as Any).
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
