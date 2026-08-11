@@ -156,12 +156,46 @@ class SpectralIndexComputer:
         zoom_x = target_shape[1] / arr.shape[1]
         return zoom(arr, (zoom_y, zoom_x), order=1).astype(np.float32)
 
-    def _mask_nodata(self, *arrays: np.ndarray) -> np.ndarray:
-        """Return True where a pixel is invalid (DN <= 0 or non-finite)."""
+    def mask_nodata(self, *arrays: np.ndarray) -> np.ndarray:
+        """Return True where a pixel is invalid (DN <= 0 or non-finite).
+
+        Sentinel-2 L2A reflectance is a positive integer DN; zero marks a gap
+        left by the scene footprint, the cloud mask or a failed read.
+        """
         invalid = np.zeros(arrays[0].shape, dtype=bool)
         for arr in arrays:
             invalid |= (arr <= 0) | ~np.isfinite(arr)
         return invalid
+
+    def compute_indices(
+        self,
+        b02: np.ndarray,
+        b03: np.ndarray,
+        b04: np.ndarray,
+        b05: np.ndarray,
+        b8a: np.ndarray,
+        b12: np.ndarray,
+        nodata_mask: np.ndarray | None = None,
+    ) -> dict[str, np.ndarray]:
+        """Compute the six spectral indices from raw band DN arrays.
+
+        Public entry point for the index mathematics, usable on its own without
+        a raster on disk. All six bands must share a shape and be in native L2A
+        digital numbers (reflectance x 10000).
+
+        Args:
+            b02: Blue. b03: Green. b04: Red. b05: Red edge 1.
+            b8a: Narrow NIR. b12: SWIR 2.
+            nodata_mask: Pixels to force to the nodata value. Derived from the
+                bands via :meth:`mask_nodata` when omitted.
+
+        Returns:
+            ``{"NDVI", "SAVI", "EVI", "NBR", "NDRE", "NDWI"}`` as float32 arrays,
+            with out-of-range values replaced by the configured nodata value.
+        """
+        if nodata_mask is None:
+            nodata_mask = self.mask_nodata(b02, b03, b04, b05, b8a, b12)
+        return self._compute_indices(b02, b03, b04, b05, b8a, b12, nodata_mask)
 
     def _compute_indices(
         self,
@@ -250,7 +284,7 @@ class SpectralIndexComputer:
         b8a = band_arrays["B8A"].astype(np.float32)
         b12 = band_arrays["B12"].astype(np.float32)
 
-        nodata_mask = self._mask_nodata(b02, b03, b04, b05, b8a, b12)
+        nodata_mask = self.mask_nodata(b02, b03, b04, b05, b8a, b12)
         indices = self._compute_indices(b02, b03, b04, b05, b8a, b12, nodata_mask)
 
         output_dir = self._config.output_root / date

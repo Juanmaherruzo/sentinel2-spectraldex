@@ -37,12 +37,18 @@ class STACCOGBandDownloader:
     Only the byte ranges intersecting the AOI bounding box are transferred, so
     the full ~1 GB SAFE archive per scene is never downloaded. Output layout:
     ``<output_dir>/<YYYY-MM-DD>/<MGRS_tile>/<band>.tif``.
+
+    Tiles that fail are skipped so one bad scene does not abort a long run, but
+    they are recorded in :attr:`failed_tiles` and summarised at ``WARNING``:
+    indices computed from a partial download would otherwise carry silent gaps.
     """
 
     def __init__(self, config: STACBandDownloadConfig) -> None:
         self._config = config
         self._write_lock = Lock()
         self._config.output_dir.mkdir(parents=True, exist_ok=True)
+        # (date, tile_id, error) for every tile that could not be downloaded.
+        self.failed_tiles: list[tuple[str, str, str]] = []
 
     @staticmethod
     def _affine_from_dataarray(data: Any, resolution: int) -> Affine:
@@ -132,6 +138,8 @@ class STACCOGBandDownloader:
         bbox_latlon = aoi_info["bbox_stac"]
         dates = sorted(clean_df["date"].unique())
         all_results: dict[str, dict[str, dict[str, Path]]] = {}
+        attempted = 0
+        self.failed_tiles = []
 
         for d_idx, date in enumerate(dates):
             date_scenes = clean_df[clean_df["date"] == date]
@@ -141,16 +149,30 @@ class STACCOGBandDownloader:
             all_results[date] = {}
             for _, row in date_scenes.iterrows():
                 tile_id = row["tile_id"]
+                attempted += 1
                 try:
                     all_results[date][tile_id] = self._download_scene_stackstac(
                         row["stac_item"], date, tile_id, bbox_latlon
                     )
                 except RuntimeError as exc:
-                    logger.error("%s skipped - %s", tile_id, exc)
+                    # Recorded, not just logged: a caller computing indices from
+                    # the result needs to know the coverage is incomplete.
+                    self.failed_tiles.append((date, tile_id, str(exc)))
+                    logger.error("%s (%s) skipped - %s", tile_id, date, exc)
 
+        if self.failed_tiles:
+            logger.warning(
+                "INCOMPLETE DOWNLOAD: %d of %d tiles failed. Indices computed from "
+                "this output will have gaps: %s",
+                len(self.failed_tiles),
+                attempted,
+                ", ".join(f"{d}/{t}" for d, t, _ in self.failed_tiles),
+            )
         logger.info(
-            "Download complete. %d dates -> %s",
+            "Download complete. %d dates, %d/%d tiles -> %s",
             len(all_results),
+            attempted - len(self.failed_tiles),
+            attempted,
             self._config.output_dir,
         )
         return all_results
