@@ -29,6 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0,<9.0.0",
+    "pytest-cov>=5.0.0,<8.0.0",
     "black>=24.0.0,<26.0.0",
     "ruff>=0.5.0,<1.0.0",
     "mypy>=1.10.0,<2.0.0",
@@ -52,7 +53,15 @@ line-length = 88
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
+# E/W pycodestyle, F pyflakes, I isort, N naming, B bugbear (real bug
+# patterns), C4 comprehensions, UP pyupgrade, RET returns, SIM simplify,
+# RUF ruff-specific. B904 in particular catches `raise ... ` inside `except`
+# without `from`, which loses the original traceback.
+select = ["E", "F", "I", "N", "W", "B", "C4", "UP", "RET", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may assert on private state and shadow names for readability.
+"tests/*" = ["SIM117"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -65,6 +74,14 @@ ignore_missing_imports = true
 module = ["numpy", "numpy.*"]
 follow_imports = "skip"
 follow_imports_for_stubs = true
+
+[tool.coverage.run]
+source = ["sentinel2"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
