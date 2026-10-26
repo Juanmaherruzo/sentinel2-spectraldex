@@ -1,10 +1,12 @@
 """Sentinel-2 band download as float32 GeoTIFFs via stackstac COG reads."""
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Any
+from urllib.request import urlopen
 
 import numpy as np
 import pandas as pd
@@ -14,6 +16,99 @@ from affine import Affine
 from rasterio.crs import CRS
 
 logger = logging.getLogger(__name__)
+
+# From processing baseline 04.00 (in production since 2022-01-25) ESA adds an
+# offset of +1000 to every L2A digital number, so reflectance = (DN - 1000) / 10000.
+# The Planetary Computer serves the products as ESA ships them (not harmonised).
+BOA_ADD_OFFSET = -1000
+_OFFSET_BASELINE = (4, 0)
+_OFFSET_START_DATE = "2022-01-25"
+# GeoTIFF tag written on every harmonised band; files without it predate the fix.
+HARMONISED_TAG = "S2_BOA_ADD_OFFSET_APPLIED"
+
+
+def boa_add_offset(stac_item: Any) -> int:
+    """Offset to add to this item's DN before dividing by 10000 (0 or -1000).
+
+    Read from the item's ``s2:processing_baseline``; when the property is
+    missing, inferred from the acquisition date (with a warning).
+    """
+    props = getattr(stac_item, "properties", {}) or {}
+    baseline = props.get("s2:processing_baseline")
+    if baseline:
+        try:
+            major, minor = (int(part) for part in str(baseline).split(".")[:2])
+        except ValueError:
+            logger.warning(
+                "Unreadable processing baseline %r; using the date", baseline
+            )
+        else:
+            return BOA_ADD_OFFSET if (major, minor) >= _OFFSET_BASELINE else 0
+    date = str(props.get("datetime", ""))[:10]
+    logger.warning(
+        "No processing baseline on item %s; offset inferred from its date (%s)",
+        getattr(stac_item, "id", "?"),
+        date or "unknown",
+    )
+    return BOA_ADD_OFFSET if date >= _OFFSET_START_DATE else 0
+
+
+# BOA_ADD_OFFSET band_id order in MTD_MSIL2A.xml (B10 has no L2A product).
+_BAND_IDS = ("B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A",
+             "B09", "B10", "B11", "B12")  # fmt: skip
+_OFFSET_RE = re.compile(r'<BOA_ADD_OFFSET\s+band_id="(\d+)"\s*>\s*(-?\d+)\s*<')
+
+
+def parse_boa_offsets(product_metadata_xml: str) -> dict[str, int]:
+    """Per-band ``BOA_ADD_OFFSET`` values declared in an MTD_MSIL2A.xml.
+
+    Products from before processing baseline 04.00 declare none and get {}.
+    """
+    offsets: dict[str, int] = {}
+    for band_id, value in _OFFSET_RE.findall(product_metadata_xml):
+        index = int(band_id)
+        if index < len(_BAND_IDS):
+            offsets[_BAND_IDS[index]] = int(value)
+    return offsets
+
+
+def band_offsets(stac_item: Any, bands: tuple[str, ...]) -> dict[str, int]:
+    """Offset to add to each band's DN, read from the product itself.
+
+    ESA advises reading ``BOA_ADD_OFFSET`` from each product's metadata rather
+    than hard-coding it. The ``product-metadata`` asset is read when available;
+    if it cannot be read, the offset falls back to :func:`boa_add_offset`
+    (processing baseline, then acquisition date) for every band.
+    """
+    asset = getattr(stac_item, "assets", {}).get("product-metadata")
+    if asset is not None:
+        try:
+            with urlopen(asset.href, timeout=60) as response:
+                declared = parse_boa_offsets(response.read().decode("utf-8"))
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                "Product metadata of %s unreadable (%s); using the baseline",
+                getattr(stac_item, "id", "?"),
+                exc,
+            )
+        else:
+            return {band: declared.get(band, 0) for band in bands}
+    fallback = boa_add_offset(stac_item)
+    return dict.fromkeys(bands, fallback)
+
+
+def harmonize_dn(arr: np.ndarray, offset: int) -> np.ndarray:
+    """Remove the L2A offset from a DN array, keeping 0 as nodata.
+
+    Valid pixels darker than the offset (true reflectance <= 0) are floored at
+    1 rather than 0, so they are not mistaken for nodata downstream.
+    """
+    out = arr.astype(np.float32, copy=True)
+    if offset == 0:
+        return out
+    valid = out > 0
+    out[valid] = np.maximum(out[valid] + offset, 1.0)
+    return out
 
 
 @dataclass
@@ -89,16 +184,28 @@ class STACCOGBandDownloader:
 
         transform = self._affine_from_dataarray(data, self._config.resolution)
         crs = CRS.from_epsg(self._config.epsg)
+        offsets = band_offsets(stac_item, tuple(self._config.bands))
         downloaded: dict[str, Path] = {}
 
         for band_name in self._config.bands:
             out_path = output_scene_dir / f"{band_name}.tif"
             if out_path.exists():
-                logger.info("SKIP: %s (%s) already exists.", band_name, tile_id)
-                downloaded[band_name] = out_path
-                continue
+                with rasterio.open(out_path) as existing:
+                    harmonised = HARMONISED_TAG in existing.tags()
+                if harmonised:
+                    logger.info("SKIP: %s (%s) already exists.", band_name, tile_id)
+                    downloaded[band_name] = out_path
+                    continue
+                # Written before the offset fix: its DN may still carry +1000.
+                logger.warning(
+                    "REWRITE: %s (%s) predates baseline harmonisation.",
+                    band_name,
+                    tile_id,
+                )
 
-            arr = data.sel(band=band_name).values[0]  # single acquisition [y, x]
+            # single acquisition [y, x], DN with the L2A offset removed
+            offset = offsets[band_name]
+            arr = harmonize_dn(data.sel(band=band_name).values[0], offset)
             profile = {
                 "driver": "GTiff",
                 "dtype": "float32",
@@ -115,6 +222,7 @@ class STACCOGBandDownloader:
             }
             with self._write_lock, rasterio.open(out_path, "w", **profile) as dst:
                 dst.write(arr, 1)
+                dst.update_tags(**{HARMONISED_TAG: str(offset)})
             downloaded[band_name] = out_path
             logger.info("OK: %s (%s) -> %s", band_name, tile_id, out_path)
 

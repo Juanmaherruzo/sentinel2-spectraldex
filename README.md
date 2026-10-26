@@ -41,7 +41,7 @@ Automated Sentinel-2 L2A spectral index pipeline powered by **Microsoft Planetar
 | NDRE | (B8A − B05) / (B8A + B05) | Canopy chlorophyll in dense forests (red-edge) |
 | NDWI | (B03 − B8A) / (B03 + B8A) | Surface water and soil moisture |
 
-All bands are scaled from Sentinel-2 DN to surface reflectance (DN / 10 000) prior to index computation. Output values are clamped to physically meaningful ranges and pixels outside the AOI polygon are set to −9999.
+All bands are scaled from Sentinel-2 DN to surface reflectance prior to index computation. Scenes processed with baseline 04.00 or later (acquired from 2022-01-25) carry a +1000 offset in their DN; the downloader removes it per scene and band, reading `BOA_ADD_OFFSET` from the product metadata (`MTD_MSIL2A.xml`, falling back to the item's `s2:processing_baseline` if it cannot be read), so reflectance = (DN − 1000) / 10 000 for those and DN / 10 000 for older ones. Indices produced by versions up to 0.2.0 from post-2022 scenes were biased low and should be regenerated. Output values are clamped to physically meaningful ranges and pixels outside the AOI polygon are set to −9999.
 
 ---
 

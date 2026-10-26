@@ -25,6 +25,8 @@ from rasterio.merge import merge as rasterio_merge
 from scipy.ndimage import zoom
 from shapely.geometry import shape
 
+from sentinel2.download import harmonize_dn
+
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 logger = logging.getLogger(__name__)
 
@@ -176,18 +178,25 @@ class SpectralIndexComputer:
         b8a: np.ndarray,
         b12: np.ndarray,
         nodata_mask: np.ndarray | None = None,
+        boa_add_offset: int = 0,
     ) -> dict[str, np.ndarray]:
-        """Compute the six spectral indices from raw band DN arrays.
+        """Compute the six spectral indices from band DN arrays.
 
         Public entry point for the index mathematics, usable on its own without
-        a raster on disk. All six bands must share a shape and be in native L2A
-        digital numbers (reflectance x 10000).
+        a raster on disk. All six bands must share a shape and be L2A digital
+        numbers (reflectance x 10000). Bands written by
+        :class:`~sentinel2.download.STACCOGBandDownloader` are already
+        harmonised; pass ``boa_add_offset=-1000`` for raw DN of products from
+        processing baseline 04.00 on (acquired from 2022-01-25), whose values
+        carry +1000. Ignoring it biases NDVI and the other ratio indices low.
 
         Args:
             b02: Blue. b03: Green. b04: Red. b05: Red edge 1.
             b8a: Narrow NIR. b12: SWIR 2.
             nodata_mask: Pixels to force to the nodata value. Derived from the
                 bands via :meth:`mask_nodata` when omitted.
+            boa_add_offset: Offset added to every valid DN before scaling
+                (0 or -1000, see :func:`sentinel2.download.boa_add_offset`).
 
         Returns:
             ``{"NDVI", "SAVI", "EVI", "NBR", "NDRE", "NDWI"}`` as float32 arrays,
@@ -195,6 +204,11 @@ class SpectralIndexComputer:
         """
         if nodata_mask is None:
             nodata_mask = self.mask_nodata(b02, b03, b04, b05, b8a, b12)
+        if boa_add_offset:
+            b02, b03, b04, b05, b8a, b12 = (
+                harmonize_dn(band, boa_add_offset)
+                for band in (b02, b03, b04, b05, b8a, b12)
+            )
         return self._compute_indices(b02, b03, b04, b05, b8a, b12, nodata_mask)
 
     def _compute_indices(
